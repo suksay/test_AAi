@@ -11,7 +11,7 @@ services:
             - "8447:8447"
         volumes: 
             - ./aai_oxm_v19.xml:/opt/app/aai-resources/resources/schema/onap/oxm/v19/aai_oxm_v19.xml
-            - ./DbEdgeRules_v19.json:/opt/app/aai-resources/resources/schema/onap/dbedgerules/v19/
+            - ./DbEdgeRules_v19.json:/opt/app/aai-resources/resources/schema/onap/dbedgerules/v19/DbEdgeRules_v19.json
             - ./janusgraph-realtime.properties:/opt/app/aai-resources/resources/etc/appprops/janusgraph-realtime.properties
             - ./janusgraph-cached.properties:/opt/app/aai-resources/resources/etc/appprops/janusgraph-cached.properties
         networks:
