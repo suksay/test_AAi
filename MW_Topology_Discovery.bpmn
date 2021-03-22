@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1fiic8e" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.4.0">
+  <bpmn:process id="MW_Topology_Discovery" name="MW_Topology_Discovery" isExecutable="true" camunda:versionTag="1">
+    <bpmn:sequenceFlow id="Flow_10bky5z" sourceRef="Event_01bq8le" targetRef="Activity_074k7xs" />
+    <bpmn:scriptTask id="Activity_074k7xs" name="Prepare Execution Variables" scriptFormat="groovy">
+      <bpmn:incoming>Flow_10bky5z</bpmn:incoming>
+      <bpmn:outgoing>Flow_0nbdfn9</bpmn:outgoing>
+      <bpmn:script>package org.onap.so.bpmn.infrastructure.scripts
+
+import org.onap.so.bpmn.common.scripts.ExceptionUtil
+import org.springframework.web.util.UriUtils
+import groovy.json.*
+import org.json.JSONObject
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+// init logging
+Logger logger = LoggerFactory.getLogger('')
+
+//Variable to get exception
+ExceptionUtil exceptionUtil = new ExceptionUtil()
+
+try {
+    //Extracting User Parameters from incoming Request and converting into a Map
+    logger.warn('MW_AUTOMATION_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ Extracting User Params from User Request @@@@@@@@@@@@@@@@@@@@@@@@@')
+    def jsonSlurper = new JsonSlurperClassic()
+    def jsonOutput = new JsonOutput()
+    String siRequest = execution.getVariable('bpmnRequest')
+    Map reqMap = jsonSlurper.parseText(siRequest)
+    //InoutParams
+    def userParams = reqMap.requestDetails?.requestParameters?.userParams
+
+    if (userParams) {
+        userParams.each {
+            userParam -&gt;
+                if ('Topology_Network_Address'.equalsIgnoreCase(userParam?.name)) {
+                    execution.setVariable('Topology_Network_Address', userParam.value)
+                }
+                if ('Topology_Network_Mask'.equalsIgnoreCase(userParam?.name)) {
+                    execution.setVariable('Topology_Network_Mask', userParam.value)
+                }
+        }
+    }
+}
+
+catch (Exception ex) {
+    msg = 'Exception in preProcessRequest ' + ex.getMessage()
+    exceptionUtil.buildAndThrowWorkflowException(execution, 7000, msg)
+}</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:sequenceFlow id="Flow_0nbdfn9" sourceRef="Activity_074k7xs" targetRef="Activity_1lr6kut" />
+    <bpmn:serviceTask id="Activity_1lr6kut" name="Send Sync Ack API Handler" camunda:asyncAfter="true" camunda:expression="${WorkflowActionBBTasks.sendSyncAck(execution)}">
+      <bpmn:incoming>Flow_0nbdfn9</bpmn:incoming>
+      <bpmn:outgoing>Flow_1evjjuv</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:startEvent id="Event_01bq8le" name="Start">
+      <bpmn:outgoing>Flow_10bky5z</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_1alc9qp" default="Flow_03o9791">
+      <bpmn:incoming>Flow_1evjjuv</bpmn:incoming>
+      <bpmn:outgoing>Flow_1r0ed00</bpmn:outgoing>
+      <bpmn:outgoing>Flow_03o9791</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_1evjjuv" name="Check Request Type" sourceRef="Activity_1lr6kut" targetRef="Gateway_1alc9qp" />
+    <bpmn:sequenceFlow id="Flow_1r0ed00" name="CreateInstance Request" sourceRef="Gateway_1alc9qp" targetRef="Activity_1mulxsw">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${requestAction=="createInstance"}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:endEvent id="Event_1jb3veo" name="Unsupported&#10;Request">
+      <bpmn:incoming>Flow_03o9791</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_03o9791" sourceRef="Gateway_1alc9qp" targetRef="Event_1jb3veo" />
+    <bpmn:serviceTask id="Activity_1mulxsw" name="CDS Topology &#10;Discovery">
+      <bpmn:extensionElements>
+        <camunda:connector>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="url">http://ccsdk-bp-rest:8080/api/v1/execution-service/process</camunda:inputParameter>
+            <camunda:inputParameter name="method">POST</camunda:inputParameter>
+            <camunda:inputParameter name="headers">
+              <camunda:map>
+                <camunda:entry key="Accept">application/json</camunda:entry>
+                <camunda:entry key="Authorization">Basic Y2NzZGthcHBzOmNjc2RrYXBwcw==</camunda:entry>
+                <camunda:entry key="Content-Type">application/json</camunda:entry>
+              </camunda:map>
+            </camunda:inputParameter>
+            <camunda:inputParameter name="payload">{
+	"actionIdentifiers": {
+		"mode": "sync",
+		"blueprintName": "mw-manager",
+		"blueprintVersion": "1.0.0",
+		"actionName": "network-discovery"
+	},
+	"payload": {
+		"network-discovery-request": {
+		}
+	},
+	"commonHeader": {
+		"subRequestId": "143748f9-3cd5-4910-81c9-a4601ff2ea58",
+		"requestId": "e5eb1f1e-3386-435d-b290-d49d8af8db4c",
+		"originatorId": "SDNC_DG"
+	}
+}</camunda:inputParameter>
+            <camunda:outputParameter name="returnCode">${statusCode}</camunda:outputParameter>
+            <camunda:outputParameter name="CDS_TOPOLOGY_RESPONSE">${response}</camunda:outputParameter>
+            <camunda:outputParameter name="Output_script">
+              <camunda:script scriptFormat="groovy">package org.onap.so.bpmn.infrastructure.scripts
+
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+Logger logger = LoggerFactory.getLogger("")
+logger.warn("E2E_POC_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ CDS Topolog Discovery Request start @@@@@@@@@@@@@@@@@@@@@@@@@")
+logger.warn("E2E_POC_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ CDS RESPONSE @@@@@@@@@@@@@@@@@@@@@@@@@")
+logger.warn(statusCode.toString())
+logger.warn(response)
+logger.warn("E2E_POC_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ CDS Topolog Discovery Request send @@@@@@@@@@@@@@@@@@@@@@@@@")</camunda:script>
+            </camunda:outputParameter>
+            <camunda:outputParameter name="WorkflowExceptionErrorMessage">${statusCode == 200 ? "":"TOPOLOGY DISCOVERY FAILURE, CHECK CDS OUTPUT"}</camunda:outputParameter>
+          </camunda:inputOutput>
+          <camunda:connectorId>http-connector</camunda:connectorId>
+        </camunda:connector>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1r0ed00</bpmn:incoming>
+      <bpmn:outgoing>Flow_1hkow81</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_1epckud" name="CDS Execution  OK ?">
+      <bpmn:incoming>Flow_1hkow81</bpmn:incoming>
+      <bpmn:outgoing>Flow_1nmezlc</bpmn:outgoing>
+      <bpmn:outgoing>Flow_1p3nb3a</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_1hkow81" sourceRef="Activity_1mulxsw" targetRef="Gateway_1epckud" />
+    <bpmn:sequenceFlow id="Flow_1nmezlc" name="No" sourceRef="Gateway_1epckud" targetRef="Event_10sqbs6" />
+    <bpmn:endEvent id="Event_10sqbs6" name="CDS Topology &#10;Discovery Failed">
+      <bpmn:incoming>Flow_1nmezlc</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_0gc8z2b" />
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Activity_1ujecc7" name="Update Request (COMPLETE)" camunda:expression="${WorkflowActionBBTasks.updateRequestStatusToComplete(execution)}">
+      <bpmn:incoming>Flow_11fcii7</bpmn:incoming>
+      <bpmn:outgoing>Flow_14vem71</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_1p3nb3a" name="Yes" sourceRef="Gateway_1epckud" targetRef="Activity_15wqg9n" />
+    <bpmn:scriptTask id="Activity_15wqg9n" name="CDS Result" scriptFormat="groovy">
+      <bpmn:incoming>Flow_1p3nb3a</bpmn:incoming>
+      <bpmn:outgoing>Flow_11fcii7</bpmn:outgoing>
+      <bpmn:script>package org.onap.so.bpmn.infrastructure.scripts
+
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.camunda.bpm.engine.delegate.BpmnError;
+import org.onap.so.client.aai.AAIObjectType
+import org.onap.so.client.aai.AAIResourcesClient
+import org.onap.so.client.aai.entities.uri.AAIResourceUri
+import org.onap.so.client.aai.entities.uri.AAIUriFactory
+import org.json.JSONObject;
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import java.text.SimpleDafit Format
+
+Logger logger = LoggerFactory.getLogger("")
+logger.warn("CDS_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ CDS Topology Discovery OK @@@@@@@@@@@@@@@@@@@@@@@@@")
+def jsonSlurper = new JsonSlurper()
+String cdsResponse = execution.getVariable("CDS_TOPOLOGY_RESPONSE")
+Map reqMap = jsonSlurper.parseText(cdsResponse)
+def vars = reqMap["payload"]["network-discovery-response"]
+Map vars2 = jsonSlurper.parseText(vars)
+execution.setVariable("Output_Values", vars2)
+
+logger.warn("CDS_LOG : @@@@@@@@@@@@@@@@@@@@@@@@@ CDS Topology Discovery Response Values @@@@@@@@@@@@@@@@@@@@@@@@@")
+logger.warn(execution.getVariable("Output_Values"))</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:sequenceFlow id="Flow_11fcii7" sourceRef="Activity_15wqg9n" targetRef="Activity_1ujecc7" />
+    <bpmn:endEvent id="Event_19vsx7l" name="End">
+      <bpmn:incoming>Flow_14vem71</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_14vem71" sourceRef="Activity_1ujecc7" targetRef="Event_19vsx7l" />
+    <bpmn:subProcess id="Activity_05x091t" name="Error Handling" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_10pf82q" name="error">
+        <bpmn:outgoing>Flow_0xb7obp</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_0mdf1s7" errorRef="Error_1ec14mv" />
+      </bpmn:startEvent>
+      <bpmn:endEvent id="Event_081eiu1" name="end">
+        <bpmn:incoming>Flow_1qrk1ni</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:serviceTask id="Activity_1jwkti4" name="Update Request To Failed" camunda:expression="${WorkflowActionBBFailure.updateRequestStatusToFailed(execution)}">
+        <bpmn:incoming>Flow_03re3jr</bpmn:incoming>
+        <bpmn:incoming>Flow_0vysngr</bpmn:incoming>
+        <bpmn:outgoing>Flow_1qrk1ni</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:exclusiveGateway id="Gateway_1d3xq3q" name="Is Top-Level Flow and Sync Ack not sent?" default="Flow_0vysngr">
+        <bpmn:incoming>Flow_0xb7obp</bpmn:incoming>
+        <bpmn:outgoing>Flow_151x5i5</bpmn:outgoing>
+        <bpmn:outgoing>Flow_0vysngr</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:serviceTask id="Activity_0hypz27" name="Send Sync Ack API Handler" camunda:asyncAfter="true" camunda:expression="${WorkflowActionBBTasks.sendErrorSyncAck(execution)}">
+        <bpmn:incoming>Flow_151x5i5</bpmn:incoming>
+        <bpmn:outgoing>Flow_03re3jr</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:sequenceFlow id="Flow_03re3jr" sourceRef="Activity_0hypz27" targetRef="Activity_1jwkti4" />
+      <bpmn:sequenceFlow id="Flow_151x5i5" name="yes" sourceRef="Gateway_1d3xq3q" targetRef="Activity_0hypz27">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${execution.getVariable("isTopLevelFlow")==true&amp;&amp;execution.getVariable("sentSyncResponse")==false}</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Flow_0vysngr" name="no" sourceRef="Gateway_1d3xq3q" targetRef="Activity_1jwkti4" />
+      <bpmn:sequenceFlow id="Flow_1qrk1ni" sourceRef="Activity_1jwkti4" targetRef="Event_081eiu1" />
+      <bpmn:sequenceFlow id="Flow_0xb7obp" sourceRef="Event_10pf82q" targetRef="Gateway_1d3xq3q" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="Activity_12c47zv" name="Java Exception Handling Sub Process" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_1p2wckb" name="error">
+        <bpmn:outgoing>Flow_1w08ut5</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorEventDefinition_07fndum" camunda:errorCodeVariable="BPMN_javaExpCode" camunda:errorMessageVariable="BPMN_javaExpMsg" />
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_1w3tbei" name="Handle Runtime Exception" camunda:expression="${WorkflowAction.handleRuntimeException(execution)}">
+        <bpmn:incoming>Flow_1w08ut5</bpmn:incoming>
+        <bpmn:outgoing>Flow_1m6xezv</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="Event_1lo0ao5">
+        <bpmn:incoming>Flow_1m6xezv</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_1m6xezv" sourceRef="Activity_1w3tbei" targetRef="Event_1lo0ao5" />
+      <bpmn:sequenceFlow id="Flow_1w08ut5" sourceRef="Event_1p2wckb" targetRef="Activity_1w3tbei" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:error id="Error_0v70dds" name="fe" />
+  <bpmn:error id="Error_0k0bgnv" />
+  <bpmn:error id="Error_184eazs" name="Error_1c0b0qc" />
+  <bpmn:error id="Error_0l8k0ax" />
+  <bpmn:error id="Error_00e4eav" name="MSOWorkflowException" errorCode="MSOWorkflowException" />
+  <bpmn:error id="Error_1ec14mv" name="MSOWorkflowException" errorCode="MSOWorkflowException" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="MW_Topology_Discovery">
+      <bpmndi:BPMNEdge id="Flow_14vem71_di" bpmnElement="Flow_14vem71">
+        <di:waypoint x="1050" y="570" />
+        <di:waypoint x="1132" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_11fcii7_di" bpmnElement="Flow_11fcii7">
+        <di:waypoint x="850" y="570" />
+        <di:waypoint x="950" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1p3nb3a_di" bpmnElement="Flow_1p3nb3a">
+        <di:waypoint x="664" y="570" />
+        <di:waypoint x="750" y="570" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="698" y="552" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1nmezlc_di" bpmnElement="Flow_1nmezlc">
+        <di:waypoint x="639" y="595" />
+        <di:waypoint x="639" y="652" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="647" y="622" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1hkow81_di" bpmnElement="Flow_1hkow81">
+        <di:waypoint x="540" y="570" />
+        <di:waypoint x="614" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_03o9791_di" bpmnElement="Flow_03o9791">
+        <di:waypoint x="285" y="570" />
+        <di:waypoint x="208" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1r0ed00_di" bpmnElement="Flow_1r0ed00">
+        <di:waypoint x="335" y="570" />
+        <di:waypoint x="440" y="570" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="342" y="576" width="75" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1evjjuv_di" bpmnElement="Flow_1evjjuv">
+        <di:waypoint x="310" y="460" />
+        <di:waypoint x="310" y="545" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="321" y="486" width="77" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0nbdfn9_di" bpmnElement="Flow_0nbdfn9">
+        <di:waypoint x="310" y="310" />
+        <di:waypoint x="310" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_10bky5z_di" bpmnElement="Flow_10bky5z">
+        <di:waypoint x="310" y="168" />
+        <di:waypoint x="310" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Activity_0e0w90l_di" bpmnElement="Activity_074k7xs">
+        <dc:Bounds x="260" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0ch70eq_di" bpmnElement="Activity_1lr6kut">
+        <dc:Bounds x="260" y="380" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0s58b9m_di" bpmnElement="Event_01bq8le">
+        <dc:Bounds x="292" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="298" y="108" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1alc9qp_di" bpmnElement="Gateway_1alc9qp" isMarkerVisible="true">
+        <dc:Bounds x="285" y="545" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1jb3veo_di" bpmnElement="Event_1jb3veo">
+        <dc:Bounds x="172" y="552" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="159" y="595" width="63" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_08w03er_di" bpmnElement="Activity_1mulxsw">
+        <dc:Bounds x="440" y="530" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1epckud_di" bpmnElement="Gateway_1epckud" isMarkerVisible="true">
+        <dc:Bounds x="614" y="545" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="604.5" y="516" width="75" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0txg5lz_di" bpmnElement="Event_10sqbs6">
+        <dc:Bounds x="621" y="652" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="599" y="695" width="82" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1ujecc7_di" bpmnElement="Activity_1ujecc7">
+        <dc:Bounds x="950" y="530" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1cu984y_di" bpmnElement="Activity_15wqg9n">
+        <dc:Bounds x="750" y="530" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_19vsx7l_di" bpmnElement="Event_19vsx7l">
+        <dc:Bounds x="1132" y="552" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1140" y="594" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_05x091t_di" bpmnElement="Activity_05x091t" isExpanded="true">
+        <dc:Bounds x="430" y="170" width="438" height="297" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0xb7obp_di" bpmnElement="Flow_0xb7obp">
+        <di:waypoint x="488" y="385" />
+        <di:waypoint x="534" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1qrk1ni_di" bpmnElement="Flow_1qrk1ni">
+        <di:waypoint x="745" y="385" />
+        <di:waypoint x="812" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0vysngr_di" bpmnElement="Flow_0vysngr">
+        <di:waypoint x="584" y="385" />
+        <di:waypoint x="615" y="385" />
+        <di:waypoint x="615" y="385" />
+        <di:waypoint x="645" y="385" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="609" y="362" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_151x5i5_di" bpmnElement="Flow_151x5i5">
+        <di:waypoint x="559" y="360" />
+        <di:waypoint x="559" y="276" />
+        <di:waypoint x="645" y="276" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="566" y="312" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_03re3jr_di" bpmnElement="Flow_03re3jr">
+        <di:waypoint x="695" y="316" />
+        <di:waypoint x="695" y="345" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_10pf82q_di" bpmnElement="Event_10pf82q">
+        <dc:Bounds x="452" y="367" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="458" y="410" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_081eiu1_di" bpmnElement="Event_081eiu1">
+        <dc:Bounds x="812" y="367" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="822" y="409" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1jwkti4_di" bpmnElement="Activity_1jwkti4">
+        <dc:Bounds x="645" y="345" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1d3xq3q_di" bpmnElement="Gateway_1d3xq3q" isMarkerVisible="true">
+        <dc:Bounds x="534" y="360" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="516" y="414" width="87" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0hypz27_di" bpmnElement="Activity_0hypz27">
+        <dc:Bounds x="645" y="236" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_12c47zv_di" bpmnElement="Activity_12c47zv" isExpanded="true">
+        <dc:Bounds x="876" y="250" width="404" height="165" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1w08ut5_di" bpmnElement="Flow_1w08ut5">
+        <di:waypoint x="967" y="335" />
+        <di:waypoint x="1051" y="335" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1m6xezv_di" bpmnElement="Flow_1m6xezv">
+        <di:waypoint x="1151" y="335" />
+        <di:waypoint x="1217" y="335" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_1p2wckb_di" bpmnElement="Event_1p2wckb">
+        <dc:Bounds x="931" y="317" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="938" y="360" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1w3tbei_di" bpmnElement="Activity_1w3tbei">
+        <dc:Bounds x="1051" y="295" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1lo0ao5_di" bpmnElement="Event_1lo0ao5">
+        <dc:Bounds x="1217" y="317" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
