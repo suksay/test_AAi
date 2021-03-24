@@ -1,7 +1,9 @@
 from aai_requests import *
 import json
 from jinja2 import Environment, FileSystemLoader
+from parameters import *
 
+from parameters import _MW_INVARIANT_ID_, _HUAWEI_MW_VERSION_ID_, _NEC_MW_VERSION_ID_
 devices = {
     "0x346ac21d93b9": {
         "address": "172.20.183.162",
@@ -49,16 +51,12 @@ for id in devices:
     URL_PNF = URL_GET_PNFS + '/pnf/{pnf_name}'.format(pnf_name = id )
 
     #Data normalize
-    if devices[id]['vendor'] == 'huawei':
-        device_data = json.loads(devices_model.render(device_id=id, device_name=devices[id]['hostname'], vendor=devices[id]['vendor'], ipv4=devices[id]['address'], description="We use model-customization-id for NE ID ", ne_id=devices[id]['ne_id'], model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_HUAWEI_MW_VERSION_ID_))
-        pnf_data = json.loads(pnf_model.render(device_id=id, device_name=devices[id]['hostname'], selflink=URL_DEVICE, equip_type="microwave", vendor=devices[id]['vendor'], model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_HUAWEI_MW_VERSION_ID_))
-    else :
-        device_data = json.loads(devices_model.render(device_id=id, device_name=devices[id]['hostname'], vendor=devices[id]['vendor'], ipv4=devices[id]['address'], description="We use model-customization-id for NE ID ", model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_NEC_MW_VERSION_ID_))
-        pnf_data = json.loads(pnf_model.render(device_id=id, device_name=devices[id]['hostname'], selflink=URL_DEVICE, equip_type="microwave", vendor=devices[id]['vendor'], model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_NEC_MW_VERSION_ID_))
+    device_data = json.loads(devices_model.render(device_id=id, device_name=devices[id]['hostname'], vendor=devices[id]['vendor'], ipv4=devices[id]['address'], description="We use model-customization-id for NE ID ", model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_NEC_MW_VERSION_ID_))
+    pnf_data = json.loads(pnf_model.render(device_id=id, device_name=devices[id]['hostname'], selflink=URL_DEVICE, equip_type="microwave", vendor=devices[id]['vendor'], model_invariant_id=_MW_INVARIANT_ID_, model_version_id=_NEC_MW_VERSION_ID_))
 
-    print(device_data)
-    print(pnf_data)
-    input("Wait")
+    #print(device_data)
+    #print(pnf_data)
+    #input("Wait")
     #Requests
-    #req_device = put_request(URL_DEVICE, device_data)
-    #req_pnf = put_request(URL_PNF, pnf_data)
+    req_device = put_request(URL_DEVICE, device_data)
+    req_pnf = put_request(URL_PNF, pnf_data)

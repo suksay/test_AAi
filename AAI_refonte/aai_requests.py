@@ -9,7 +9,7 @@ import os, json
 import requests
 
 ### GENERAL VARIABLES #####
-AAI_ADDRESS = "aai-resource-test" #os.getenv('AAI_ADDRESS')
+AAI_ADDRESS = "localhost" #os.getenv('AAI_ADDRESS')
 AAI_USERNAME = "AAI" #os.getenv('AAI_USERNAME')
 AAI_PASSWORD = "AAI" #os.getenv('AAI_PASSWORD')
 
